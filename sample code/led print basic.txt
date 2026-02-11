@@ -1,0 +1,36 @@
+#define PxMATRIX_OE_INVERT     1
+#define PxMATRIX_DATA_INVERT   1
+#define PxMATRIX_GAMMA_PRESET  3
+#define PxMATRIX_DOUBLE_BUFFER 1
+#include <PxMatrix.h>
+
+// Pin definitions
+#define P_A   19
+#define P_B   21
+#define P_OE  22
+#define P_LAT 2
+const uint8_t SPI_MOSI = 23;
+const uint8_t SPI_SCK  = 18;
+
+PxMATRIX display(32, 16, P_LAT, P_OE, P_A, P_B);
+
+void setup() {
+  Serial.begin(115200);
+  while (!Serial);
+
+  display.begin(4);
+  display.flushDisplay();
+  display.showBuffer();
+
+  display.clearDisplay();
+  display.setTextColor(0xFF);
+  display.setCursor(1, 1);
+  display.println("Sabaw");
+  display.setCursor(2, 8);
+  display.println("Sabaw");
+  display.showBuffer();
+}
+
+void loop() {
+  display.display(50); // continuously refresh display
+}
