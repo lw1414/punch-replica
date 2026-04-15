@@ -1,4 +1,7 @@
-\
+#define PxMATRIX_OE_INVERT     1
+#define PxMATRIX_DATA_INVERT   1
+#define PxMATRIX_GAMMA_PRESET  3
+#define PxMATRIX_DOUBLE_BUFFER 1
 
 #include <PxMatrix.h>
 #include <Ticker.h>
@@ -8,7 +11,7 @@
 //////////////////////////////////////////////////
 // PINS
 //////////////////////////////////////////////////
-#define RPM_SENSOR_PIN 35 // IO34 is available also
+#define RPM_SENSOR_PIN 35
 #define COIN_PIN       33
 #define DETECT_PIN     25
 
@@ -85,8 +88,6 @@ void triggerAction() {
   // Only RELAY1 pulses
   if (!relayActive) {
     digitalWrite(RELAY1, LOW);
-    digitalWrite(RELAY2, LOW);
-    digitalWrite(RELAY3, LOW);
     relayStartMillis = millis();
     relayActive = true;
   }
@@ -162,8 +163,6 @@ void loop() {
   // --------- Non-blocking relay pulse for RELAY1 ---------
   if (relayActive && (now - relayStartMillis >= relayPulseTime)) {
     digitalWrite(RELAY1, HIGH);
-    digitalWrite(RELAY2, HIGH);
-    digitalWrite(RELAY3, HIGH);
     relayActive = false;
   }
 
