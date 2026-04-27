@@ -53,9 +53,8 @@ State state = IDLE;
 //////////////////////////////////////////////////
 unsigned long stateStart = 0;
 
-const unsigned long RELAY_ON_TIME  = 16000;
-const unsigned long RELAY_OFF_TIME = 16000;
-
+const unsigned long RELAY_ON_TIME = 3000; //typical 16s
+const unsigned long RELAY_OFF_TIME = 3000;
 
 //////////////////////////////////////////////////
 // BOOT FIX
@@ -115,17 +114,15 @@ void checkCoin() {
 
 //////////////////////////////////////////////////
 // BUTTON
-// FIX: seed 'last' from actual pin state to avoid
-//      a false-press on the very first call after boot.
 //////////////////////////////////////////////////
 bool buttonPressed() {
   static int initialized = 0;
   static bool last = HIGH;
 
   if (!initialized) {
-    last = digitalRead(BUTTON_PIN);  // ← read real state first
+    last = digitalRead(BUTTON_PIN);
     initialized = 1;
-    return false;                    // never trigger on first call
+    return false;
   }
 
   bool now = digitalRead(BUTTON_PIN);
@@ -179,9 +176,7 @@ bool idleTrackPlaying = false;
 unsigned long relayStart = 0;
 
 //////////////////////////////////////////////////
-// HELPER: draw text and flush to panel
-// FIX: centralises clearDisplay + setCursor + showBuffer
-//      so no state ever forgets to call showBuffer().
+// HELPER
 //////////////////////////////////////////////////
 void showText(const char* line1, const char* line2 = nullptr) {
   display.clearDisplay();
@@ -191,7 +186,7 @@ void showText(const char* line1, const char* line2 = nullptr) {
     display.setCursor(0, 8);
     display.print(line2);
   }
-  display.showBuffer();   // ← was missing in several states
+  display.showBuffer();
 }
 
 //////////////////////////////////////////////////
@@ -228,8 +223,6 @@ void enterState(State newState) {
   }
 }
 
-
-
 //////////////////////////////////////////////////
 // SETUP
 //////////////////////////////////////////////////
@@ -261,10 +254,7 @@ void setup() {
   display.begin(4);
   display.setTextColor(0xFF);
 
-  // Seed the button de-bounce state so the very first loop()
-  // call does not see a phantom falling edge.
   buttonPressed();
-
   bootTime = millis();
 }
 
@@ -273,7 +263,6 @@ void setup() {
 //////////////////////////////////////////////////
 void loop() {
 
-  // BOOT LOCK
   if (!systemReady) {
     if (millis() - bootTime > 1500) systemReady = true;
     else return;
@@ -284,160 +273,148 @@ void loop() {
 
   switch (state) {
 
-    // --------------------------------------------------
-case IDLE:
-{
-  static int x = display.width();
-  static unsigned long lastMove = 0;
+    case IDLE:
+      {
+        static int x = display.width();
+        static unsigned long lastMove = 0;
 
-  char buf[32];
-  snprintf(buf, sizeof(buf), "HIGH SCORE:%d", highScore);
+        static int btnCount = 0;
+        static unsigned long lastBtnTime = 0;
 
-  display.clearDisplay();
+        if (buttonPressed()) {
+          if (millis() - lastBtnTime < 2000 || btnCount == 0) {
+            btnCount++;
+          } else {
+            btnCount = 1;
+          }
 
-  // -----------------------------
-  // BIG TEXT EMULATION (LOCAL ONLY)
-  // -----------------------------
-  display.setTextColor(0xFF);
+          lastBtnTime = millis();
 
-  // scale factor ONLY for this state
-  display.setTextSize(2);
+          if (btnCount >= 3) {
+            highScore = 0;
+            EEPROM.put(0, highScore);
+            EEPROM.commit();
+            btnCount = 0;
+          }
+        }
 
-  int textWidth = strlen(buf) * 12;
+        char buf[32];
+        snprintf(buf, sizeof(buf), "HIGH SCORE:%d", highScore);
 
-  display.setCursor(x, 1);
-  display.print(buf);
+        display.clearDisplay();
+        display.setTextColor(0xFF);
+        display.setTextSize(2);
 
-  display.showBuffer();
+        int textWidth = strlen(buf) * 12;
 
-  // reset immediately so other states are NOT affected
-  display.setTextSize(1);
+        display.setCursor(x, 1);
+        display.print(buf);
 
-  // scroll logic
-  if (millis() - lastMove > 35) {
-    x--;
+        display.showBuffer();
+        display.setTextSize(1);
 
-    if (x < -textWidth) {
-      x = display.width();
-    }
+        if (millis() - lastMove > 35) {
+          x--;
+          if (x < -textWidth) x = display.width();
+          lastMove = millis();
+        }
 
-    lastMove = millis();
-  }
+        if (coinDetected) {
+          coinDetected = false;
+          enterState(COIN_DETECTED);
+        }
 
-  // ---- EXISTING LOGIC (UNCHANGED) ----
-  if (coinDetected) {
-    coinDetected = false;
-    enterState(COIN_DETECTED);
-  }
+        if (!idleTrackPlaying) {
+          playTrack(1);
+          idleTrackPlaying = true;
+          idleTimer = millis();
+        }
 
-  if (!idleTrackPlaying) {
-    playTrack(1);
-    idleTrackPlaying = true;
-    idleTimer = millis();
-  }
+        if (millis() - idleTimer > 180000) {
+          idleTrackPlaying = false;
+        }
 
-  if (millis() - idleTimer > 180000) {
-    idleTrackPlaying = false;
-  }
+        break;
+      }
 
-  break;
-}
-    // --------------------------------------------------
     case COIN_DETECTED:
-      showText("COIN OK");          // FIX: was missing showBuffer()
-
+      showText("COIN OK");
       if (millis() - stateStart > 1200)
         enterState(WAIT_BUTTON);
       break;
 
-    // --------------------------------------------------
     case WAIT_BUTTON:
-      showText("PUSH BUTTON");      // FIX: was missing showBuffer()
-
+      showText("PUSH BUTTON");
       if (buttonPressed())
         enterState(RELAY_PHASE);
       break;
 
-    // --------------------------------------------------
     case RELAY_PHASE:
-    {
-      showText("WAIT");             // FIX: was missing showBuffer()
+      {
+        showText("WAIT");
 
-      unsigned long t = millis() - relayStart;
+        unsigned long t = millis() - relayStart;
 
-      if (t < RELAY_ON_TIME) {
-        digitalWrite(RELAY1, LOW);
-        digitalWrite(RELAY2, LOW);
+        if (t < RELAY_ON_TIME) {
+          digitalWrite(RELAY1, LOW);
+          digitalWrite(RELAY2, LOW);
+        } else if (t < RELAY_ON_TIME + RELAY_OFF_TIME) {
+          digitalWrite(RELAY1, HIGH);
+          digitalWrite(RELAY2, HIGH);
+        } else {
+          rpmPulse = 0;
+          enterState(WAIT_RPM);
+        }
+        break;
       }
-      else if (t < RELAY_ON_TIME + RELAY_OFF_TIME) {
-        digitalWrite(RELAY1, HIGH);
-        digitalWrite(RELAY2, HIGH);
-      }
-      else {
-        rpmPulse = 0;
-        enterState(WAIT_RPM);
-      }
-      break;
-    }
 
-    // --------------------------------------------------
     case WAIT_RPM:
-    {
-      showText("PUNCH");            // FIX: was missing showBuffer()
+      {
+        showText("PUNCH");
 
-      float rpm = getRPM();
+        float rpm = getRPM();
 
-      if (rpm > 5) {
-        lastRPM = rpm;
+        if (rpm > 5) {
+          lastRPM = rpm;
 
-        float capped = rpm;
-        if (capped > 120.0f) capped = 120.0f;
+          float capped = rpm;
+          if (capped > 120.0f) capped = 120.0f;
 
-        score = constrain((int)(pow(capped / 120.0f, 1.8f) * 999), 0, 999);
+          // 🔥 REVERSED SCORING LOGIC (LOW RPM = HIGH SCORE)
+          float norm = capped / 120.0f;
+          if (norm > 1.0f) norm = 1.0f;
 
-        enterState(RESULT);
+          score = constrain((int)(pow(1.0f - norm, 1.8f) * 999), 0, 999);
+
+          enterState(RESULT);
+        }
+        break;
       }
-      break;
-    }
 
-    // --------------------------------------------------
     case RESULT:
-    {
-      animateScore();
+      {
+        animateScore();
 
-      display.clearDisplay();
+        display.clearDisplay();
 
-      if (score > highScore) {
-        highScore = score;
-        EEPROM.put(0, highScore);
-        EEPROM.commit();
+        if (score > highScore) {
+          highScore = score;
+          EEPROM.put(0, highScore);
+          EEPROM.commit();
+          playTrack(5);
+        }
 
-        playTrack(5);
-
-        char buf[16];
-        snprintf(buf, sizeof(buf), "HIGH:%d", highScore);
-        display.setCursor(0, 0);
-        display.print(buf);
-      } else {
         char buf[16];
         snprintf(buf, sizeof(buf), "S:%d", displayedScore);
         display.setCursor(0, 0);
         display.print(buf);
-      }
 
-      {
-        char buf[16];
-        snprintf(buf, sizeof(buf), "RPM:%d", (int)lastRPM);
-        display.setCursor(0, 8);
-        display.print(buf);
-      }
+        display.showBuffer();
 
-      display.showBuffer();   // ← was present but kept explicit here
-
-      if (millis() - stateStart > 8000) {
-        enterState(IDLE);
+        if (millis() - stateStart > 8000) {
+          enterState(IDLE);
+        }
+        break;
       }
-      break;
-    }
   }
-}
+}//stop
