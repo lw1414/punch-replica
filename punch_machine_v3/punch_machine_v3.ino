@@ -11,6 +11,13 @@
 #include <DFRobotDFPlayerMini.h>
 #include <EEPROM.h>
 
+/*MP3 PLAYER MUST FOLLOW SD CARD FORMAT INSISDE SD CARD:
+0001 - Eye of the tiger
+0002 - Coin Detected
+0003 - Push the button
+0004 - Waiting for powerful punch
+0005 - Congratulations*/
+
 //////////////////////////////////////////////////
 // PINS
 //////////////////////////////////////////////////
@@ -53,6 +60,7 @@ State state = IDLE;
 //////////////////////////////////////////////////
 unsigned long stateStart = 0;
 
+// THIS IS WHERE YOU CHANGE THE ON AND OFF TIME DELAY OF THE HYDRAULIC
 const unsigned long RELAY_ON_TIME = 3000;  //typical 16s
 const unsigned long RELAY_OFF_TIME = 3000;
 
